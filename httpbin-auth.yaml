@@ -1,0 +1,60 @@
+# This will overwrite the existing VirtualService for httpbin, changing it to
+# point at the oauth2-proxy instead.
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: httpbin
+  namespace: httpbin
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - istio-system/httpbin
+  http:
+  - match:
+    - port: 80
+    route:
+    - destination:
+        port:
+          number: 80
+        host: oauth2-proxy
+---
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: httpbin
+  namespace: httpbin
+spec:
+  selector:
+    matchLabels:
+      app: httpbin
+  # TODO: Change to GitHub details.
+  jwtRules:
+  - issuer: https://accounts.google.com
+    jwksUri: https://www.googleapis.com/oauth2/v3/certs
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: httpbin
+  namespace: httpbin
+spec:
+  action: ALLOW
+  selector:
+    matchLabels:
+      app: httpbin
+  rules:
+  - from:
+    - source:
+        requestPrincipals: ["*"]
+    to:
+    - operation:
+        paths: ["*"]
+  # TODO: Test this more.
+  # This should allow access to the /forms/post endpoint without going through
+  # OIDC. This could be a useful pattern for apps that expose some endpoint that
+  # other cluster workloads need direct access to, for example metrics.
+  - to:
+    - operation:
+        paths: ["/forms/post"]
+---

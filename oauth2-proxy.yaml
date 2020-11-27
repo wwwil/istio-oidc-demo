@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy
+  namespace: httpbin
+spec:
+  selector:
+    app: oauth2-proxy
+  ports:
+  - name: http
+    port: 4180
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy
+  namespace: httpbin
+spec:
+  selector:
+    matchLabels:
+      app: oauth2-proxy
+  template:
+    metadata:
+      labels:
+        app: oauth2-proxy
+    spec:
+      containers:
+      - name: oauth2-proxy
+        image: quay.io/oauth2-proxy/oauth2-proxy:v6.1.1
+        args:
+        - --provider=oidc
+        - --cookie-secure=false
+        - --cookie-samesite=lax
+        - --cookie-refresh=1h
+        - --cookie-expire=4h
+        - --cookie-name=_oauth2_proxy_istio_ingressgateway
+        - --set-authorization-header=true
+        - --email-domain=*
+        - --http-address=0.0.0.0:4180
+        - --skip-provider-button=true
+        # TODO: Change to GitHub details
+        - --oidc-issuer-url=https://accounts.google.com
+        - --upstream=http://httpbin.httpbin.svc.cluster.local:80/
+        - --pass-access-token=true
+        - --pass-authorization-header=true
+        - --pass-host-header=false
+        env:
+        - name: OAUTH2_PROXY_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy
+              key: OAUTH2_PROXY_CLIENT_ID
+        - name: OAUTH2_PROXY_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy
+              key: OAUTH2_PROXY_CLIENT_SECRET
+        - name: OAUTH2_PROXY_COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy
+              key: OAUTH2_PROXY_COOKIE_SECRET
+        resources:
+          requests:
+            cpu: 10m
+            memory: 100Mi
+        ports:
+        - containerPort: 4180
+          protocol: TCP
+        readinessProbe:
+          periodSeconds: 3
+          httpGet:
+            path: /ping
+            port: 4180
+---
